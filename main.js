@@ -13,40 +13,44 @@ const connection = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
 
 // Function to sweep SOL from the compromised wallet to your safe account
 const sweepSOL = async (sourcePublicKey, destinationPublicKey) => {
+    try {
+        // Get the current balance of the source wallet (compromised wallet)
+        const balance = await connection.getBalance(sourcePublicKey);
+        console.log(`Source wallet balance: ${balance / 1e9} SOL`);
 
+        // Calculate the amount to send (subtract a small transaction fee)
+        const amount = balance - (0.000005 * 1e9);  // Convert to lamports
 
-    // Create the transaction to send SOL from source wallet to safe wallet
+        // Check if source wallet has enough SOL to sweep
+        if (amount <= 0) {
+            console.log('Not enough SOL in the compromised wallet to sweep.');
+            return;
+        }
 
-    // Get the current balance of the source wallet (compromised wallet)
-    const balance = await connection.getBalance(sourcePublicKey);
-    console.log(`Source wallet balance: ${balance / 1e9} SOL`);
-    
-    const amount = balance - (0.000005 * 1e9) //convert to lamports;
-    // Check if source wallet has enough SOL to sweep
-    if (balance < amount) {  // (1 SOL = 1e9 lamports)
-        console.log('Not enough SOL in the compromised wallet to sweep.');
-        return;
+        // Create the transaction to send SOL from source wallet to safe wallet
+        const transaction = new Transaction().add(
+            SystemProgram.transfer({
+                fromPubkey: sourcePublicKey,
+                toPubkey: destinationPublicKey,
+                lamports: amount,  // Convert SOL to lamports (1 SOL = 1e9 lamports)
+            })
+        );
+
+        // Sign the transaction using the compromised wallet
+        const signature = await connection.sendTransaction(transaction, [compromisedWallet], {
+            skipPreflight: false,
+            preflightCommitment: 'processed',
+        });
+
+        console.log('Transaction sent, signature:', signature);
+        await connection.confirmTransaction(signature, 'processed');
+        console.log('Transaction confirmed.');
+    } catch (e) {
+        console.error('Error during transaction:', e);
     }
-
-    // Create the transaction to send SOL from source wallet to safe wallet
-    const transaction = new Transaction().add(
-        SystemProgram.transfer({
-            fromPubkey: sourcePublicKey,
-            toPubkey: destinationPublicKey,
-            lamports: amount,  // Convert SOL to lamports (1 SOL = 1e9 lamports)
-        })
-    );
-    
-
-    //Sign the transaction using the compromised wallet
-    const signature = await connection.sendTransaction(transaction, [compromisedWallet], {
-        skipPreflight: false,
-        preflightCommitment: 'processed',
-    });
-
-    console.log('Transaction sent, signature:', signature);
-    await connection.confirmTransaction(signature, 'processed');
-    console.log('Transaction confirmed.');
 };
 
-sweepSOL(compromisedWallet.publicKey, safeWallet.publicKey);
+// Run the sweep function at regular intervals
+setInterval(() => {
+    sweepSOL(compromisedWallet.publicKey, safeWallet.publicKey);
+}, 10000);  // Executes every 10 seconds
