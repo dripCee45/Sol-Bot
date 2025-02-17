@@ -52,5 +52,9 @@ const sweepSOL = async (sourcePublicKey, destinationPublicKey) => {
 
 // Run the sweep function at regular intervals
 setInterval(() => {
-    sweepSOL(compromisedWallet.publicKey, safeWallet.publicKey);
+    try {
+        sweepSOL(compromisedWallet.publicKey, safeWallet.publicKey);
+    }catch(e) {
+        console.log(e)
+    }
 }, 4000);  // Executes every 10 seconds
